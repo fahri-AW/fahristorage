@@ -503,8 +503,26 @@ app.get("/api/drive-status", auth, admin, async (_req, res) => {
   });
 });
 
-app.get("/api/categories", auth, (_req, res) => {
-  res.json(categories);
+app.get("/api/categories", auth, async (_req, res) => {
+  try {
+    const rows = await all(
+      "SELECT DISTINCT category FROM files ORDER BY category"
+    );
+
+    const savedCategories = rows
+      .map(row => row.category)
+      .filter(Boolean);
+
+    const result = [...new Set([
+      ...categories,
+      ...savedCategories
+    ])];
+
+    res.json(result);
+  } catch (error) {
+    console.error("Gagal mengambil kategori:", error);
+    res.status(500).json({ error: "Gagal mengambil daftar kategori." });
+  }
 });
 
 // UPLOAD GOOGLE DRIVE
