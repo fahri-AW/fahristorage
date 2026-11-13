@@ -1,108 +1,232 @@
 <!doctype html>
 <html lang="id">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DriveSpace — Penyimpanan Pribadi</title>
-<link rel="stylesheet" href="/style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f7fc">
+  <title>DriveSpace | Personal Cloud</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-<div id="loginView" class="auth-shell">
-  <section class="auth-card">
-    <div class="brand-mark">D</div>
-    <p class="eyebrow">PERSONAL CLOUD STORAGE</p>
-    <h1>Selamat datang kembali</h1>
-    <p class="muted">Masuk untuk mengelola dokumen yang tersimpan di Google Drive pribadi Anda.</p>
-    <form id="loginForm">
-      <label>Username<input name="username" autocomplete="username" required placeholder="Masukkan username"></label>
-      <label>Password<input name="password" type="password" autocomplete="current-password" required placeholder="Masukkan password"></label>
-      <button class="primary full" type="submit">Masuk ke dashboard <span>→</span></button>
-      <p id="loginError" class="error"></p>
-    </form>
-    <div class="auth-foot">Akses aman · Sinkronisasi Google Drive</div>
-  </section>
-</div>
+  <div id="loginView" class="auth-shell">
+    <section class="auth-card">
+      <div class="brand-mark">D</div>
+      <p class="eyebrow">PERSONAL CLOUD STORAGE</p>
+      <h1>Selamat datang kembali</h1>
+      <p class="muted">Masuk untuk mengelola dokumen yang tersimpan di Google Drive pribadi Anda.</p>
+      <form id="loginForm">
+        <label>Username
+          <input name="username" autocomplete="username" required placeholder="Masukkan username">
+        </label>
+        <label>Password
+          <input name="password" type="password" autocomplete="current-password" required placeholder="Masukkan password">
+        </label>
+        <button class="primary full" type="submit">Masuk ke dashboard <span>→</span></button>
+        <p id="loginError" class="error"></p>
+      </form>
+      <div class="auth-foot">Akses aman · Sinkronisasi Google Drive</div>
+    </section>
+  </div>
 
-<div id="appView" class="app-shell" hidden>
-  <aside class="sidebar">
-    <a class="brand" href="#"><span class="brand-mark small">D</span><span>DriveSpace<small>PERSONAL CLOUD</small></span></a>
-    <div class="side-label">WORKSPACE</div>
-    <button class="nav active" data-page="files"><span>▦</span> Semua file</button>
-    <button class="nav" data-page="history"><span>◷</span> Riwayat aktivitas</button>
-    <div class="side-label">PENGELOLAAN</div>
-    <button class="nav" data-page="users" id="usersNav" hidden><span>♙</span> Pengguna</button>
-    <div class="sidebar-bottom">
-      <div class="storage-card">
-        <div class="storage-icon">☁</div>
-        <b>Google Drive</b>
-        <p id="driveState">Periksa koneksi Drive</p>
-        <button id="connectDrive" class="outline small-btn" hidden>Hubungkan Drive</button>
-      </div>
-      <div class="profile">
-        <div class="avatar" id="avatar">U</div>
-        <div class="profile-meta"><b id="profileName">Pengguna</b><small id="profileRole">User</small></div>
-        <button id="logoutBtn" class="icon-btn" title="Keluar">↪</button>
-      </div>
-    </div>
-  </aside>
+  <div id="appView" class="app-shell" hidden>
+    <aside class="sidebar">
+      <a class="brand" href="#">
+        <span class="brand-mark small">D</span>
+        <span>DriveSpace<small>PERSONAL CLOUD</small></span>
+      </a>
 
-  <main class="main">
-    <header class="topbar">
-      <div><span class="eyebrow">PERSONAL WORKSPACE</span><h1 id="pageTitle">Semua file</h1></div>
-      <div class="top-actions"><span class="secure-pill">● Penyimpanan aman</span><button id="topUpload" class="primary">＋ Upload file</button></div>
-    </header>
+      <div class="side-label">WORKSPACE</div>
+      <button class="nav active" data-page="files"><span>▦</span> Semua file</button>
+      <button class="nav" data-page="history"><span>◷</span> Riwayat aktivitas</button>
 
-    <section id="filesPage" class="page">
-      <div class="welcome-row">
-        <div><h2>Ruang penyimpanan Anda</h2><p class="muted">Kelola dokumen dan file dalam satu tempat.</p></div>
-        <div class="file-count"><b id="fileCount">0</b><span>file tersimpan</span></div>
-      </div>
-      <div class="upload-panel" id="dropZone">
-        <div class="upload-symbol">↑</div>
-        <div><b>Tarik file ke sini untuk mengunggah</b><p class="muted">atau pilih file dari perangkat Anda · Maks. sesuai konfigurasi server</p></div>
-        <button class="outline" id="chooseFile">Pilih file</button>
-        <input id="fileInput" type="file" multiple hidden>
-        <div class="upload-progress" id="uploadProgress" hidden><div id="progressBar"></div></div>
-        <p id="uploadMessage" class="upload-message"></p>
-      </div>
+      <div class="side-label">PENGELOLAAN</div>
+      <button class="nav" data-page="users" id="usersNav" hidden><span>♙</span> Pengguna</button>
 
-      <div class="toolbar">
-        <div><h2>File Anda</h2><p class="muted">Cari, pratinjau, atau unduh dokumen.</p></div>
-        <div class="filters">
-          <div class="searchbox"><span>⌕</span><input id="searchInput" placeholder="Cari nama file..."></div>
-          <select id="categoryFilter"><option value="">Semua kategori</option></select>
+      <div class="sidebar-bottom">
+        <div class="storage-card">
+          <div class="storage-icon">☁</div>
+          <b>Google Drive</b>
+          <p id="driveState">Memeriksa koneksi Drive...</p>
+          <button id="connectDrive" class="outline small-btn" hidden>Hubungkan Drive</button>
+        </div>
+        <div class="profile">
+          <div class="avatar" id="avatar">U</div>
+          <div class="profile-meta">
+            <b id="profileName">Pengguna</b>
+            <small id="profileRole">User</small>
+          </div>
+          <button id="logoutBtn" class="icon-btn" title="Keluar">↪</button>
         </div>
       </div>
-      <div id="fileGrid" class="file-grid"></div>
-      <div id="emptyState" class="empty-state" hidden><div>▤</div><b>Belum ada file</b><p>Unggah file pertama Anda untuk memulai.</p></div>
-    </section>
+    </aside>
 
-    <section id="historyPage" class="page" hidden>
-      <div class="section-heading"><h2>Riwayat aktivitas</h2><p class="muted">Catatan upload dan penghapusan file.</p></div>
-      <div class="table-wrap"><table><thead><tr><th>Aktivitas</th><th>Nama file</th><th>Kategori</th><th>Pengguna</th><th>Waktu</th></tr></thead><tbody id="historyBody"></tbody></table></div>
-    </section>
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <span class="eyebrow">PERSONAL WORKSPACE</span>
+          <h1 id="pageTitle">Semua file</h1>
+        </div>
+        <div class="top-actions">
+          <span class="secure-pill">● Penyimpanan aman</span>
+          <button id="topUpload" class="primary">＋ Upload file</button>
+        </div>
+      </header>
 
-    <section id="usersPage" class="page" hidden>
-      <div class="section-heading"><h2>Manajemen pengguna</h2><p class="muted">Buat akun lokal dan atur status akses dashboard.</p></div>
-      <form id="userForm" class="user-form">
-        <label>Username<input name="username" required minlength="3" placeholder="username.baru"></label>
-        <label>Password<input name="password" type="password" required minlength="10" placeholder="Minimal 10 karakter"></label>
-        <label>Peran<select name="role"><option value="user">Pengguna</option><option value="admin">Admin</option></select></label>
-        <button class="primary" type="submit">＋ Tambah pengguna</button>
-      </form>
-      <p id="userMessage" class="muted"></p>
-      <div class="table-wrap"><table><thead><tr><th>Username</th><th>Peran</th><th>Status</th><th>Dibuat</th><th>Aksi</th></tr></thead><tbody id="usersBody"></tbody></table></div>
-    </section>
-  </main>
-</div>
+      <section id="filesPage" class="page">
+        <div class="welcome-row">
+          <div>
+            <span class="eyebrow section-eyebrow">FILE MANAGER</span>
+            <h2>Ruang penyimpanan Anda</h2>
+            <p class="muted">Simpan, cari, pratinjau, dan cetak dokumen dalam satu tempat.</p>
+          </div>
+          <div class="file-count">
+            <b id="fileCount">0</b>
+            <span>file tersimpan</span>
+          </div>
+        </div>
 
-<div id="previewModal" class="modal" hidden>
-  <div class="modal-backdrop" data-close="true"></div>
-  <div class="preview-dialog">
-    <div class="preview-head"><b id="previewTitle">Pratinjau file</b><button class="icon-btn" id="closePreview">✕</button></div>
-    <div class="preview-content" id="previewContent"></div>
+        <div class="upload-panel" id="dropZone">
+          <div class="upload-symbol">↑</div>
+          <div class="upload-copy">
+            <b>Tarik file ke sini untuk mengunggah</b>
+            <p class="muted">atau pilih file dari perangkat Anda.</p>
+          </div>
+          <button class="outline" id="chooseFile">Pilih file</button>
+          <input id="fileInput" type="file" multiple hidden>
+          <div class="upload-progress" id="uploadProgress" hidden>
+            <div id="progressBar"></div>
+          </div>
+          <p id="uploadMessage" class="upload-message"></p>
+        </div>
+
+        <div class="toolbar">
+          <div>
+            <h2>File Anda</h2>
+            <p class="muted">Temukan dan kelola dokumen dengan mudah.</p>
+          </div>
+          <div class="filters">
+            <label class="searchbox">
+              <span>⌕</span>
+              <input id="searchInput" type="search" placeholder="Cari nama file...">
+            </label>
+            <select id="categoryFilter" aria-label="Filter kategori">
+              <option value="">Semua kategori</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="fileGrid" class="file-grid"></div>
+        <div id="emptyState" class="empty-state" hidden>
+          <div>▤</div>
+          <b>Belum ada file</b>
+          <p>Unggah file pertama Anda untuk memulai.</p>
+        </div>
+      </section>
+
+      <section id="historyPage" class="page" hidden>
+        <div class="section-heading">
+          <h2>Riwayat aktivitas</h2>
+          <p class="muted">Catatan aktivitas upload dan penghapusan file.</p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Aktivitas</th><th>Nama file</th><th>Kategori</th><th>Pengguna</th><th>Waktu</th></tr>
+            </thead>
+            <tbody id="historyBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="usersPage" class="page" hidden>
+        <div class="section-heading">
+          <h2>Manajemen pengguna</h2>
+          <p class="muted">Buat akun dan atur hak akses pengguna.</p>
+        </div>
+        <form id="userForm" class="user-form">
+          <label>Username<input name="username" required minlength="3" placeholder="username.baru"></label>
+          <label>Password<input name="password" type="password" required minlength="10" placeholder="Minimal 10 karakter"></label>
+          <label>Peran
+            <select name="role">
+              <option value="user">Pengguna</option>
+              <option value="admin">Admin</option>
+            </select>
+          </label>
+          <button class="primary" type="submit">＋ Tambah pengguna</button>
+        </form>
+        <p id="userMessage" class="muted"></p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Username</th><th>Peran</th><th>Status</th><th>Dibuat</th><th>Aksi</th></tr>
+            </thead>
+            <tbody id="usersBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
   </div>
-</div>
-<script src="/app.js" defer></script>
+
+  <!-- Dialog pilihan kategori upload -->
+  <div id="uploadModal" class="modal" hidden>
+    <div class="modal-backdrop" data-close-upload="true"></div>
+    <section class="choice-dialog">
+      <div class="dialog-heading">
+        <div>
+          <span class="eyebrow">UPLOAD FILE</span>
+          <h2>Pilih folder penyimpanan</h2>
+          <p class="muted">File akan disimpan ke folder kategori di Google Drive.</p>
+        </div>
+        <button class="icon-btn" id="closeUploadModal" type="button">✕</button>
+      </div>
+      <label class="field-label" for="uploadCategory">Kategori folder</label>
+      <select id="uploadCategory" class="dialog-input">
+        <option value="Skripsi">Skripsi</option>
+        <option value="Akademik" selected>Akademik</option>
+        <option value="Pekerjaan">Pekerjaan</option>
+        <option value="Pribadi">Pribadi</option>
+        <option value="Keuangan">Keuangan</option>
+        <option value="Foto & Gambar">Foto & Gambar</option>
+        <option value="Lainnya">Lainnya</option>
+      </select>
+      <div id="customFolderWrap" hidden>
+        <label class="field-label" for="customFolderName">Nama folder baru</label>
+        <input id="customFolderName" class="dialog-input" maxlength="80" placeholder="Contoh: Dokumen Kuliah">
+        <p class="field-help">Gunakan nama folder yang ingin dibuat di Google Drive.</p>
+      </div>
+      <div class="selected-files">
+        <span>File yang dipilih</span>
+        <b id="selectedFilesCount">0 file</b>
+      </div>
+      <div class="dialog-actions">
+        <button class="outline" id="cancelUpload" type="button">Batal</button>
+        <button class="primary" id="confirmUpload" type="button">Upload sekarang</button>
+      </div>
+      <p id="uploadDialogError" class="error"></p>
+    </section>
+  </div>
+
+  <!-- Dialog pratinjau dan cetak -->
+  <div id="previewModal" class="modal" hidden>
+    <div class="modal-backdrop" data-close-preview="true"></div>
+    <section class="preview-dialog">
+      <div class="preview-head">
+        <div class="preview-title-wrap">
+          <span class="eyebrow">FILE PREVIEW</span>
+          <b id="previewTitle">Pratinjau file</b>
+        </div>
+        <div class="preview-actions">
+          <button class="primary small-btn" id="printPreview" type="button">▣ Print</button>
+          <button class="icon-btn" id="closePreview" type="button">✕</button>
+        </div>
+      </div>
+      <div class="preview-content" id="previewContent"></div>
+    </section>
+  </div>
+
+  <script src="/app.js" defer></script>
 </body>
 </html>
