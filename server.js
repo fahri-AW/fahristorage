@@ -603,6 +603,115 @@ app.get("/api/drive-status", auth, admin, async (_req, res) => {
 });
 
 /* =========================
+   INFORMASI PENYIMPANAN
+========================= */
+
+app.get("/api/storage", auth, async (req, res) => {
+  try {
+    const drive = await getDrive();
+
+    const [about, stats, folderStats] = await Promise.all([
+      drive.about.get({
+        fields: "storageQuota,user"
+      }),
+
+      get(`
+        SELECT
+          COUNT(*) AS total_files,
+          COALESCE(SUM(size), 0) AS total_size
+        FROM files
+        ${req.session.user.role === "admin" ? "" : "WHERE uploaded_by=?"}
+      `, req.session.user.role === "admin"
+        ? []
+        : [req.session.user.id]
+      ),
+
+      all(`
+        SELECT
+          category,
+          COUNT(*) AS total_files,
+          COALESCE(SUM(size), 0) AS total_size
+        FROM files
+        ${req.session.user.role === "admin" ? "" : "WHERE uploaded_by=?"}
+        GROUP BY category
+        ORDER BY category
+      `, req.session.user.role === "admin"
+        ? []
+        : [req.session.user.id]
+      )
+    ]);
+
+    const quota = about.data.storageQuota || {};
+
+    const used = Number(quota.usage || 0);
+    const driveUsed = Number(quota.usageInDrive || 0);
+    const limit = quota.limit ? Number(quota.limit) : null;
+
+    const remaining = limit !== null
+      ? Math.max(0, limit - used)
+      : null;
+
+    const percentage = limit
+      ? Math.min(100, (used / limit) * 100)
+      : null;
+
+    const folderMap = new Map(
+      folderStats.map(folder => [
+        folder.category,
+        {
+          name: folder.category,
+          totalFiles: Number(folder.total_files),
+          totalSize: Number(folder.total_size)
+        }
+      ])
+    );
+
+    const folderNames = [
+      "Skripsi",
+      "Akademik",
+      "Pekerjaan",
+      "Pribadi",
+      "Keuangan",
+      "Foto & Gambar",
+      "Lainnya"
+    ];
+
+    const folders = folderNames.map(name =>
+      folderMap.get(name) || {
+        name,
+        totalFiles: 0,
+        totalSize: 0
+      }
+    );
+
+    res.json({
+      connected: true,
+      storage: {
+        used,
+        driveUsed,
+        limit,
+        remaining,
+        percentage,
+        unlimited: limit === null
+      },
+      files: {
+        total: Number(stats.total_files),
+        totalSize: Number(stats.total_size)
+      },
+      folders
+    });
+
+  } catch (error) {
+    console.error("Storage information error:", error);
+
+    res.status(500).json({
+      error: "Gagal mengambil informasi penyimpanan."
+    });
+  }
+});
+
+
+/* =========================
    DAFTAR KATEGORI
 ========================= */
 
