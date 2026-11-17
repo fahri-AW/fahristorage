@@ -76,17 +76,82 @@
       </header>
 
       <section id="filesPage" class="page">
-        <div class="welcome-row">
-          <div>
-            <span class="eyebrow section-eyebrow">FILE MANAGER</span>
-            <h2>Ruang penyimpanan Anda</h2>
-            <p class="muted">Simpan, cari, pratinjau, dan cetak dokumen dalam satu tempat.</p>
-          </div>
-          <div class="file-count">
-            <b id="fileCount">0</b>
-            <span>file tersimpan</span>
-          </div>
-        </div>
+        
+<div class="welcome-row">
+  <div>
+    <span class="eyebrow">PERSONAL CLOUD STORAGE</span>
+    <h2>Ruang penyimpanan Anda</h2>
+    <p class="muted">Semua dokumen tersimpan dan terorganisasi dalam satu tempat.</p>
+  </div>
+
+  <div class="file-count">
+    <b id="fileCount">0</b>
+    <span>File tersimpan</span>
+  </div>
+</div>
+
+<!-- STORAGE OVERVIEW -->
+<div class="storage-overview">
+  <div class="storage-main">
+    <div class="storage-heading">
+      <div>
+        <span class="storage-label">TOTAL PENYIMPANAN</span>
+        <h2 id="storageUsed">Memuat...</h2>
+        <p id="storageDescription">Mengambil informasi Google Drive</p>
+      </div>
+      <div class="storage-cloud-icon">☁</div>
+    </div>
+
+    <div class="storage-progress">
+      <div id="storageProgressBar"></div>
+    </div>
+
+    <div class="storage-details">
+      <span id="storagePercentage">--%</span>
+      <span id="storageRemaining">Sisa: --</span>
+    </div>
+
+    <div class="storage-divider"></div>
+
+    <div class="storage-bottom">
+      <div>
+        <small>File dalam aplikasi</small>
+        <b id="storageFileCount">0 file</b>
+      </div>
+      <div>
+        <small>Ukuran file aplikasi</small>
+        <b id="storageFileSize">0 MB</b>
+      </div>
+      <div>
+        <small>Penggunaan Google Drive</small>
+        <b id="storageDriveUsed">--</b>
+      </div>
+    </div>
+  </div>
+
+  <div class="storage-side">
+    <div class="storage-side-icon">▣</div>
+    <h3>Kelola penyimpanan</h3>
+    <p>Pantau kapasitas dan atur dokumen berdasarkan folder.</p>
+    <span class="storage-status" id="storageStatus">Memeriksa koneksi</span>
+    <button class="outline" id="refreshStorage">↻ Perbarui informasi</button>
+  </div>
+</div>
+
+<!-- FOLDER OVERVIEW -->
+<div class="folder-section">
+  <div class="folder-heading">
+    <div>
+      <h2>Folder penyimpanan</h2>
+      <p class="muted">Kelompokkan file berdasarkan kebutuhan Anda.</p>
+    </div>
+    <span id="folderTotal">7 Folder</span>
+  </div>
+
+  <div class="folder-grid" id="folderGrid">
+    <div class="folder-loading">Memuat folder...</div>
+  </div>
+</div>
 
         <div class="upload-panel" id="dropZone">
           <div class="upload-symbol">↑</div>
