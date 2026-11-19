@@ -1047,3 +1047,298 @@ td {
     background: white;
   }
 }
+
+/* =========================
+   STORAGE DASHBOARD
+========================= */
+
+.storage-overview {
+  display: grid;
+  grid-template-columns: 1.7fr 1fr;
+  gap: 17px;
+  margin: 25px 0 32px;
+}
+
+.storage-main {
+  padding: 25px;
+  border-radius: 18px;
+  color: white;
+  background: linear-gradient(125deg, #244fc5, #4779ed);
+  box-shadow: 0 12px 28px #3768e82b;
+}
+
+.storage-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.storage-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: #d8e4ff;
+}
+
+.storage-heading h2 {
+  font: 800 29px Manrope;
+  margin: 9px 0 5px;
+}
+
+.storage-heading p {
+  margin: 0;
+  font-size: 12px;
+  color: #dce6ff;
+}
+
+.storage-cloud-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 15px;
+  display: grid;
+  place-items: center;
+  background: #ffffff24;
+  font-size: 25px;
+}
+
+.storage-progress {
+  height: 10px;
+  border-radius: 20px;
+  background: #ffffff35;
+  margin-top: 25px;
+  overflow: hidden;
+}
+
+.storage-progress div {
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: white;
+  transition: width .4s ease;
+}
+
+.storage-details {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-size: 11px;
+  color: #e3ebff;
+}
+
+.storage-divider {
+  height: 1px;
+  background: #ffffff35;
+  margin: 22px 0;
+}
+
+.storage-bottom {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.storage-bottom div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.storage-bottom small {
+  color: #dce6ff;
+  font-size: 10px;
+}
+
+.storage-bottom b {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.storage-side {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 23px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.storage-side-icon {
+  width: 43px;
+  height: 43px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  color: var(--blue);
+  background: #edf3ff;
+  font-size: 22px;
+}
+
+.storage-side h3 {
+  margin: 17px 0 7px;
+  font: 800 16px Manrope;
+}
+
+.storage-side p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 0 0 15px;
+}
+
+.storage-status {
+  font-size: 11px;
+  color: var(--green);
+  margin-bottom: 15px;
+}
+
+.storage-side button {
+  margin-top: auto;
+  font-size: 11px;
+}
+
+/* =========================
+   FOLDER SECTION
+========================= */
+
+.folder-section {
+  margin: 30px 0;
+}
+
+.folder-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 17px;
+}
+
+.folder-heading h2 {
+  font: 800 18px Manrope;
+  margin: 0 0 5px;
+}
+
+.folder-heading p {
+  margin: 0;
+  font-size: 12px;
+}
+
+.folder-heading > span {
+  color: var(--muted);
+  font-size: 11px;
+  background: white;
+  border: 1px solid var(--line);
+  padding: 8px 12px;
+  border-radius: 20px;
+}
+
+.folder-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.folder-card {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  cursor: pointer;
+  transition: .2s;
+  min-width: 0;
+}
+
+.folder-card:hover {
+  border-color: #b9cafa;
+  box-shadow: 0 8px 20px #243a6810;
+  transform: translateY(-2px);
+}
+
+.folder-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #edf3ff;
+  color: #3768e8;
+  font-size: 22px;
+  margin-bottom: 14px;
+}
+
+.folder-card h3 {
+  font: 800 13px Manrope;
+  margin: 0 0 7px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-card p {
+  font-size: 10px;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+
+.folder-card strong {
+  font-size: 11px;
+  color: #526178;
+}
+
+.folder-loading {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 20px;
+  background: white;
+  border-radius: 12px;
+  grid-column: 1 / -1;
+}
+
+@media(max-width:1050px) {
+  .folder-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media(max-width:720px) {
+  .storage-overview {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .storage-main {
+    padding: 19px;
+  }
+
+  .storage-heading h2 {
+    font-size: 23px;
+  }
+
+  .storage-bottom {
+    gap: 8px;
+  }
+
+  .storage-bottom small {
+    font-size: 9px;
+  }
+
+  .storage-bottom b {
+    font-size: 11px;
+  }
+
+  .storage-side {
+    padding: 19px;
+  }
+
+  .folder-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+  }
+
+  .folder-card {
+    padding: 12px;
+  }
+
+  .folder-heading {
+    gap: 8px;
+  }
+}
