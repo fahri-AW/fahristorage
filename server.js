@@ -1,4 +1,4 @@
-
+const app = express();
 import "dotenv/config";
 import express from "express";
 import session from "express-session";
@@ -1568,7 +1568,17 @@ app.get("/api/files", auth, async (req, res) => {
       "File list error:",
       error.message
     );
+/* =========================
+   SERVER
+========================= */
 
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`DriveSpace berjalan di port ${PORT}`);
+  });
+}
+
+export default app;
     res.status(500).json({
       error: "Gagal mengambil daftar file."
     });
