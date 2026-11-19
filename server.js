@@ -44,6 +44,7 @@ if (!/^[a-fA-F0-9]{64}$/.test(process.env.TOKEN_ENCRYPTION_KEY)) {
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
+
 const maxFileBytes =
   Number(process.env.MAX_FILE_SIZE_MB || (process.env.VERCEL ? 4 : 50)) *
   1024 * 1024;
@@ -122,6 +123,11 @@ const SCOPES = [
   "https://www.googleapis.com/auth/drive"
 ];
 
+/*
+ * Membuat koneksi Google Drive.
+ * Refresh token lama tetap dipertahankan jika Google
+ * tidak mengirimkan refresh token baru.
+ */
 
 function driveForTokens(tokens) {
   const auth = new google.auth.OAuth2(
@@ -132,7 +138,6 @@ function driveForTokens(tokens) {
 
   auth.setCredentials(tokens);
 
-  // Simpan token terbaru tanpa menghapus refresh token lama.
   auth.on("tokens", async (fresh) => {
     try {
       const row = await get(
@@ -146,45 +151,14 @@ function driveForTokens(tokens) {
       const updated = {
         ...current,
         ...fresh,
-        refresh_token: fresh.refresh_token || current.refresh_token
+        refresh_token:
+          fresh.refresh_token || current.refresh_token
       };
 
       await run(
         "UPDATE settings SET value=? WHERE key='google_tokens'",
         [encrypt(updated)]
       );
-    } catch (error) {
-      console.error(
-        "Gagal memperbarui token Google:",
-        error.message
-      );
-    }
-  });
-
-  return google.drive({
-    version: "v3",
-    auth
-  });
-}
-
-  );
-
-  auth.setCredentials(tokens);
-
-  auth.on("tokens", async (fresh) => {
-    try {
-      const row = await get(
-        "SELECT value FROM settings WHERE key='google_tokens'"
-      );
-
-      if (row) {
-        const current = decrypt(row.value);
-
-        await run(
-          "UPDATE settings SET value=? WHERE key='google_tokens'",
-          [encrypt({ ...current, ...fresh })]
-        );
-      }
     } catch (error) {
       console.error(
         "Gagal memperbarui token Google:",
@@ -597,9 +571,22 @@ app.get(
         "SELECT value FROM settings WHERE key='google_tokens'"
       );
 
-      const merged = old
-        ? { ...decrypt(old.value), ...tokens }
-        : tokens;
+      const oldTokens = old
+        ? decrypt(old.value)
+        : {};
+
+      const merged = {
+        ...oldTokens,
+        ...tokens,
+        refresh_token:
+          tokens.refresh_token || oldTokens.refresh_token
+      };
+
+      if (!merged.refresh_token) {
+        throw new Error(
+          "Google tidak memberikan refresh token. Cabut akses aplikasi dari Google Account, lalu hubungkan kembali."
+        );
+      }
 
       await run(
         `INSERT INTO settings(key,value)
@@ -615,7 +602,10 @@ app.get(
 
       res.redirect("/?drive=connected");
     } catch (error) {
-      console.error("Google OAuth error:", error);
+      console.error(
+        "Google OAuth error:",
+        error.message
+      );
 
       res.status(500).send(
         "Gagal menghubungkan Google Drive. Periksa konfigurasi OAuth."
@@ -623,6 +613,10 @@ app.get(
     }
   }
 );
+
+/* =========================
+   STATUS GOOGLE DRIVE
+========================= */
 
 app.get("/api/drive-status", auth, admin, async (_req, res) => {
   try {
@@ -634,7 +628,10 @@ app.get("/api/drive-status", auth, admin, async (_req, res) => {
       connected: Boolean(row)
     });
   } catch (error) {
-    console.error(error);
+    console.error(
+      "Drive status error:",
+      error.message
+    );
 
     res.status(500).json({
       error: "Gagal memeriksa koneksi Google Drive."
@@ -648,52 +645,102 @@ app.get("/api/drive-status", auth, admin, async (_req, res) => {
 
 app.get("/api/storage", auth, async (req, res) => {
   try {
-    const drive = await getDrive();
-
-    const [about, stats, folderStats] = await Promise.all([
-      drive.about.get({
-        fields: "storageQuota,user"
-      }),
-
-      get(`
-        SELECT
+    const [stats, folderStats] = await Promise.all([
+      get(
+        `SELECT
           COUNT(*) AS total_files,
           COALESCE(SUM(size), 0) AS total_size
-        FROM files
-        ${req.session.user.role === "admin" ? "" : "WHERE uploaded_by=?"}
-      `, req.session.user.role === "admin"
-        ? []
-        : [req.session.user.id]
+         FROM files
+         ${
+           req.session.user.role === "admin"
+             ? ""
+             : "WHERE uploaded_by=?"
+         }`,
+        req.session.user.role === "admin"
+          ? []
+          : [req.session.user.id]
       ),
 
-      all(`
-        SELECT
+      all(
+        `SELECT
           category,
           COUNT(*) AS total_files,
           COALESCE(SUM(size), 0) AS total_size
-        FROM files
-        ${req.session.user.role === "admin" ? "" : "WHERE uploaded_by=?"}
-        GROUP BY category
-        ORDER BY category
-      `, req.session.user.role === "admin"
-        ? []
-        : [req.session.user.id]
+         FROM files
+         ${
+           req.session.user.role === "admin"
+             ? ""
+             : "WHERE uploaded_by=?"
+         }
+         GROUP BY category
+         ORDER BY category`,
+        req.session.user.role === "admin"
+          ? []
+          : [req.session.user.id]
       )
     ]);
 
-    const quota = about.data.storageQuota || {};
+    let storage = {
+      used: null,
+      driveUsed: null,
+      limit: null,
+      remaining: null,
+      percentage: null,
+      unlimited: false
+    };
 
-    const used = Number(quota.usage || 0);
-    const driveUsed = Number(quota.usageInDrive || 0);
-    const limit = quota.limit ? Number(quota.limit) : null;
+    let connected = false;
+    let reconnectRequired = false;
 
-    const remaining = limit !== null
-      ? Math.max(0, limit - used)
-      : null;
+    try {
+      const drive = await getDrive();
 
-    const percentage = limit
-      ? Math.min(100, (used / limit) * 100)
-      : null;
+      const about = await drive.about.get({
+        fields: "storageQuota,user"
+      });
+
+      const quota = about.data.storageQuota || {};
+
+      const used = Number(quota.usage || 0);
+      const driveUsed = Number(quota.usageInDrive || 0);
+
+      const limit = quota.limit
+        ? Number(quota.limit)
+        : null;
+
+      storage = {
+        used,
+        driveUsed,
+        limit,
+
+        remaining:
+          limit !== null
+            ? Math.max(0, limit - used)
+            : null,
+
+        percentage:
+          limit !== null && limit > 0
+            ? Math.min(100, (used / limit) * 100)
+            : null,
+
+        unlimited: limit === null
+      };
+
+      connected = true;
+    } catch (googleError) {
+      const errorCode =
+        googleError.response?.data?.error;
+
+      console.error(
+        "Google Drive storage error:",
+        errorCode || googleError.message
+      );
+
+      reconnectRequired = [
+        "invalid_grant",
+        "invalid_token"
+      ].includes(errorCode);
+    }
 
     const folderMap = new Map(
       folderStats.map(folder => [
@@ -716,40 +763,46 @@ app.get("/api/storage", auth, async (req, res) => {
       "Lainnya"
     ];
 
-    const folders = folderNames.map(name =>
-      folderMap.get(name) || {
-        name,
-        totalFiles: 0,
-        totalSize: 0
-      }
-    );
+    const folders = [
+      ...folderNames.map(name =>
+        folderMap.get(name) || {
+          name,
+          totalFiles: 0,
+          totalSize: 0
+        }
+      ),
+
+      ...Array.from(folderMap.values()).filter(
+        folder => !folderNames.includes(folder.name)
+      )
+    ];
 
     res.json({
-      connected: true,
-      storage: {
-        used,
-        driveUsed,
-        limit,
-        remaining,
-        percentage,
-        unlimited: limit === null
-      },
+      connected,
+      reconnectRequired,
+
+      storage,
+
       files: {
         total: Number(stats.total_files),
         totalSize: Number(stats.total_size)
       },
+
       folders
     });
 
   } catch (error) {
-    console.error("Storage information error:", error);
+    console.error(
+      "Storage information error:",
+      error.message
+    );
 
     res.status(500).json({
+      connected: false,
       error: "Gagal mengambil informasi penyimpanan."
     });
   }
 });
-
 
 /* =========================
    DAFTAR KATEGORI
@@ -773,8 +826,12 @@ app.get("/api/categories", auth, async (_req, res) => {
     ];
 
     res.json(result);
+
   } catch (error) {
-    console.error(error);
+    console.error(
+      "Category error:",
+      error.message
+    );
 
     res.status(500).json({
       error: "Gagal mengambil daftar kategori."
@@ -811,6 +868,7 @@ app.post(
         selectedCategory !== "Lainnya"
       ) {
         category = selectedCategory;
+
       } else if (selectedCategory === "Lainnya") {
         category = String(
           req.body.customCategory || ""
@@ -825,6 +883,7 @@ app.post(
             error: "Nama folder khusus tidak valid."
           });
         }
+
       } else {
         return res.status(400).json({
           error: "Kategori folder tidak valid."
@@ -843,24 +902,27 @@ app.post(
       );
 
       /*
-       * PENTING:
        * Google API membutuhkan stream.
-       * Jangan mengirim Buffer langsung sebagai media.body.
-       * Readable.from() mencegah error:
-       * part.body.pipe is not a function
+       * Readable.from() digunakan agar Buffer
+       * dapat dikirim sebagai stream.
        */
-      const fileStream = Readable.from(req.file.buffer);
+
+      const fileStream = Readable.from(
+        req.file.buffer
+      );
 
       const uploaded = await drive.files.create({
         requestBody: {
           name: originalName,
           parents: [folderId]
         },
+
         media: {
           mimeType:
             req.file.mimetype || "application/octet-stream",
           body: fileStream
         },
+
         fields: "id,name,mimeType,size,webViewLink"
       });
 
@@ -874,9 +936,11 @@ app.post(
           [
             uploaded.data.id,
             uploaded.data.name,
+
             uploaded.data.mimeType ||
               req.file.mimetype ||
               "application/octet-stream",
+
             Number(uploaded.data.size || req.file.size),
             category,
             req.session.user.id,
@@ -895,6 +959,7 @@ app.post(
             req.session.user.id
           ]
         );
+
       } catch (databaseError) {
         await drive.files.delete({
           fileId: uploadedFileId
@@ -906,14 +971,19 @@ app.post(
       res.json({
         ok: true,
         message: "File berhasil disimpan ke Google Drive.",
+
         file: {
           id: uploaded.data.id,
           name: uploaded.data.name,
           category
         }
       });
+
     } catch (error) {
-      console.error("Upload error:", error);
+      console.error(
+        "Upload error:",
+        error.message
+      );
 
       res.status(500).json({
         error: error.message || "Upload gagal."
@@ -965,8 +1035,12 @@ app.get("/api/files", auth, async (req, res) => {
     const rows = await all(sql, params);
 
     res.json(rows);
+
   } catch (error) {
-    console.error(error);
+    console.error(
+      "File list error:",
+      error.message
+    );
 
     res.status(500).json({
       error: "Gagal mengambil daftar file."
@@ -975,433 +1049,528 @@ app.get("/api/files", auth, async (req, res) => {
 });
 
 /* =========================
-   STREAM FILE DARI DRIVE
+   GOOGLE DRIVE OAUTH
 ========================= */
 
-async function streamDriveFile(req, res, disposition) {
-  const file = await get(
-    "SELECT * FROM files WHERE id=?",
-    [req.params.id]
-  );
+app.get("/auth/google", auth, admin, (req, res) => {
+  const state = crypto.randomBytes(24).toString("hex");
 
-  if (
-    !file ||
-    !canAccessFile(req.session.user, file)
-  ) {
-    res.status(404).send("File tidak ditemukan.");
-    return;
-  }
+  req.session.googleOAuthState = state;
 
-  const drive = await getDrive();
-
-  const result = await drive.files.get(
-    {
-      fileId: file.drive_id,
-      alt: "media"
-    },
-    {
-      responseType: "stream"
+  req.session.save((error) => {
+    if (error) {
+      return res.status(500).send(
+        "Gagal menyimpan sesi OAuth."
+      );
     }
-  );
 
-  const stream = result.data;
-
-  if (
-    !stream ||
-    typeof stream.pipe !== "function"
-  ) {
-    throw new Error(
-      "Google Drive tidak mengembalikan stream file yang valid."
-    );
-  }
-
-  res.setHeader(
-    "Content-Type",
-    file.mime_type || "application/octet-stream"
-  );
-
-  res.setHeader(
-    "Content-Disposition",
-    `${disposition}; filename*=UTF-8''${encodeURIComponent(file.name)}`
-  );
-
-  res.setHeader(
-    "X-Content-Type-Options",
-    "nosniff"
-  );
-
-  if (disposition === "inline") {
-    res.setHeader(
-      "Content-Security-Policy",
-      "default-src 'none'; sandbox"
-    );
-  }
-
-  await pipeline(stream, res);
-}
-
-/* =========================
-   PREVIEW PDF DAN GAMBAR
-========================= */
+    res.redirect(oauth.generateAuthUrl({
+      access_type: "offline",
+      prompt: "consent",
+      scope: SCOPES,
+      state
+    }));
+  });
+});
 
 app.get(
-  "/api/files/:id/preview",
+  "/auth/google/callback",
   auth,
+  admin,
   async (req, res) => {
     try {
-      const file = await get(
-        "SELECT * FROM files WHERE id=?",
-        [req.params.id]
-      );
-
       if (
-        !file ||
-        !canAccessFile(req.session.user, file)
+        !req.query.state ||
+        req.query.state !== req.session.googleOAuthState
       ) {
-        return res.status(404).send(
-          "File tidak ditemukan."
+        return res.status(400).send(
+          "OAuth state tidak valid."
         );
       }
 
-      const allowed =
-        file.mime_type === "application/pdf" ||
-        [
-          "image/jpeg",
-          "image/png",
-          "image/gif",
-          "image/webp",
-          "image/bmp"
-        ].includes(file.mime_type);
+      delete req.session.googleOAuthState;
 
-      if (!allowed) {
-        return res.status(415).send(
-          "Preview hanya tersedia untuk PDF dan gambar."
-        );
-      }
-
-      await streamDriveFile(
-        req,
-        res,
-        "inline"
+      const { tokens } = await oauth.getToken(
+        String(req.query.code || "")
       );
-    } catch (error) {
-      console.error("Preview error:", error);
 
-      if (!res.headersSent) {
-        res.status(500).send(
-          "Gagal membuka preview."
+      const old = await get(
+        "SELECT value FROM settings WHERE key='google_tokens'"
+      );
+
+      const oldTokens = old
+        ? decrypt(old.value)
+        : {};
+
+      const merged = {
+        ...oldTokens,
+        ...tokens,
+        refresh_token:
+          tokens.refresh_token || oldTokens.refresh_token
+      };
+
+      if (!merged.refresh_token) {
+        throw new Error(
+          "Google tidak memberikan refresh token. Cabut akses aplikasi dari Google Account, lalu hubungkan kembali."
         );
-      } else {
-        res.destroy(error);
       }
+
+      await run(
+        `INSERT INTO settings(key,value)
+         VALUES('google_tokens',?)
+         ON CONFLICT(key)
+         DO UPDATE SET value=EXCLUDED.value`,
+        [encrypt(merged)]
+      );
+
+      const drive = driveForTokens(merged);
+
+      await getRootFolder(drive);
+
+      res.redirect("/?drive=connected");
+    } catch (error) {
+      console.error(
+        "Google OAuth error:",
+        error.message
+      );
+
+      res.status(500).send(
+        "Gagal menghubungkan Google Drive. Periksa konfigurasi OAuth."
+      );
     }
   }
 );
 
 /* =========================
-   DOWNLOAD FILE
+   STATUS GOOGLE DRIVE
 ========================= */
 
-app.get(
-  "/api/files/:id/download",
-  auth,
-  async (req, res) => {
-    try {
-      await streamDriveFile(
-        req,
-        res,
-        "attachment"
-      );
-    } catch (error) {
-      console.error("Download error:", error);
+app.get("/api/drive-status", auth, admin, async (_req, res) => {
+  try {
+    const row = await get(
+      "SELECT value FROM settings WHERE key='google_tokens'"
+    );
 
-      if (!res.headersSent) {
-        res.status(500).send(
-          "Download gagal."
-        );
-      } else {
-        res.destroy(error);
-      }
-    }
+    res.json({
+      connected: Boolean(row)
+    });
+  } catch (error) {
+    console.error(
+      "Drive status error:",
+      error.message
+    );
+
+    res.status(500).json({
+      error: "Gagal memeriksa koneksi Google Drive."
+    });
   }
-);
+});
 
 /* =========================
-   HAPUS FILE
+   INFORMASI PENYIMPANAN
 ========================= */
 
-app.delete(
-  "/api/files/:id",
-  auth,
-  async (req, res) => {
+app.get("/api/storage", auth, async (req, res) => {
+  try {
+    const [stats, folderStats] = await Promise.all([
+      get(
+        `SELECT
+          COUNT(*) AS total_files,
+          COALESCE(SUM(size), 0) AS total_size
+         FROM files
+         ${
+           req.session.user.role === "admin"
+             ? ""
+             : "WHERE uploaded_by=?"
+         }`,
+        req.session.user.role === "admin"
+          ? []
+          : [req.session.user.id]
+      ),
+
+      all(
+        `SELECT
+          category,
+          COUNT(*) AS total_files,
+          COALESCE(SUM(size), 0) AS total_size
+         FROM files
+         ${
+           req.session.user.role === "admin"
+             ? ""
+             : "WHERE uploaded_by=?"
+         }
+         GROUP BY category
+         ORDER BY category`,
+        req.session.user.role === "admin"
+          ? []
+          : [req.session.user.id]
+      )
+    ]);
+
+    let storage = {
+      used: null,
+      driveUsed: null,
+      limit: null,
+      remaining: null,
+      percentage: null,
+      unlimited: false
+    };
+
+    let connected = false;
+    let reconnectRequired = false;
+
     try {
-      const file = await get(
-        "SELECT * FROM files WHERE id=?",
-        [req.params.id]
+      const drive = await getDrive();
+
+      const about = await drive.about.get({
+        fields: "storageQuota,user"
+      });
+
+      const quota = about.data.storageQuota || {};
+
+      const used = Number(quota.usage || 0);
+      const driveUsed = Number(quota.usageInDrive || 0);
+
+      const limit = quota.limit
+        ? Number(quota.limit)
+        : null;
+
+      storage = {
+        used,
+        driveUsed,
+        limit,
+
+        remaining:
+          limit !== null
+            ? Math.max(0, limit - used)
+            : null,
+
+        percentage:
+          limit !== null && limit > 0
+            ? Math.min(100, (used / limit) * 100)
+            : null,
+
+        unlimited: limit === null
+      };
+
+      connected = true;
+    } catch (googleError) {
+      const errorCode =
+        googleError.response?.data?.error;
+
+      console.error(
+        "Google Drive storage error:",
+        errorCode || googleError.message
       );
 
+      reconnectRequired = [
+        "invalid_grant",
+        "invalid_token"
+      ].includes(errorCode);
+    }
+
+    const folderMap = new Map(
+      folderStats.map(folder => [
+        folder.category,
+        {
+          name: folder.category,
+          totalFiles: Number(folder.total_files),
+          totalSize: Number(folder.total_size)
+        }
+      ])
+    );
+
+    const folderNames = [
+      "Skripsi",
+      "Akademik",
+      "Pekerjaan",
+      "Pribadi",
+      "Keuangan",
+      "Foto & Gambar",
+      "Lainnya"
+    ];
+
+    const folders = [
+      ...folderNames.map(name =>
+        folderMap.get(name) || {
+          name,
+          totalFiles: 0,
+          totalSize: 0
+        }
+      ),
+
+      ...Array.from(folderMap.values()).filter(
+        folder => !folderNames.includes(folder.name)
+      )
+    ];
+
+    res.json({
+      connected,
+      reconnectRequired,
+
+      storage,
+
+      files: {
+        total: Number(stats.total_files),
+        totalSize: Number(stats.total_size)
+      },
+
+      folders
+    });
+
+  } catch (error) {
+    console.error(
+      "Storage information error:",
+      error.message
+    );
+
+    res.status(500).json({
+      connected: false,
+      error: "Gagal mengambil informasi penyimpanan."
+    });
+  }
+});
+
+/* =========================
+   DAFTAR KATEGORI
+========================= */
+
+app.get("/api/categories", auth, async (_req, res) => {
+  try {
+    const rows = await all(
+      "SELECT DISTINCT category FROM files ORDER BY category"
+    );
+
+    const savedCategories = rows
+      .map(row => row.category)
+      .filter(Boolean);
+
+    const result = [
+      ...new Set([
+        ...categories,
+        ...savedCategories
+      ])
+    ];
+
+    res.json(result);
+
+  } catch (error) {
+    console.error(
+      "Category error:",
+      error.message
+    );
+
+    res.status(500).json({
+      error: "Gagal mengambil daftar kategori."
+    });
+  }
+});
+
+/* =========================
+   UPLOAD FILE
+========================= */
+
+app.post(
+  "/api/upload",
+  auth,
+  upload.single("file"),
+  async (req, res) => {
+    let uploadedFileId = null;
+
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          error: "Pilih file terlebih dahulu."
+        });
+      }
+
+      const selectedCategory = String(
+        req.body.category || ""
+      ).trim();
+
+      let category;
+
       if (
-        !file ||
-        !canAccessFile(req.session.user, file)
+        categories.includes(selectedCategory) &&
+        selectedCategory !== "Lainnya"
       ) {
-        return res.status(404).json({
-          error: "File tidak ditemukan."
+        category = selectedCategory;
+
+      } else if (selectedCategory === "Lainnya") {
+        category = String(
+          req.body.customCategory || ""
+        ).trim();
+
+        if (
+          !category ||
+          category.length > 80 ||
+          /[\\/:*?"<>|]/.test(category)
+        ) {
+          return res.status(400).json({
+            error: "Nama folder khusus tidak valid."
+          });
+        }
+
+      } else {
+        return res.status(400).json({
+          error: "Kategori folder tidak valid."
         });
       }
 
       const drive = await getDrive();
 
-      await drive.files.delete({
-        fileId: file.drive_id
+      const folderId = await getCategoryFolder(
+        drive,
+        category
+      );
+
+      const originalName = safeName(
+        req.file.originalname
+      );
+
+      /*
+       * Google API membutuhkan stream.
+       * Readable.from() digunakan agar Buffer
+       * dapat dikirim sebagai stream.
+       */
+
+      const fileStream = Readable.from(
+        req.file.buffer
+      );
+
+      const uploaded = await drive.files.create({
+        requestBody: {
+          name: originalName,
+          parents: [folderId]
+        },
+
+        media: {
+          mimeType:
+            req.file.mimetype || "application/octet-stream",
+          body: fileStream
+        },
+
+        fields: "id,name,mimeType,size,webViewLink"
       });
 
-      await run(
-        "DELETE FROM files WHERE id=?",
-        [file.id]
-      );
+      uploadedFileId = uploaded.data.id;
 
-      await run(
-        `INSERT INTO upload_history
-         (file_name,category,action,user_id)
-         VALUES(?,?,?,?)`,
-        [
-          file.name,
-          file.category,
-          "DELETE",
-          req.session.user.id
-        ]
-      );
+      try {
+        await run(
+          `INSERT INTO files
+           (drive_id,name,mime_type,size,category,uploaded_by,drive_url)
+           VALUES(?,?,?,?,?,?,?)`,
+          [
+            uploaded.data.id,
+            uploaded.data.name,
+
+            uploaded.data.mimeType ||
+              req.file.mimetype ||
+              "application/octet-stream",
+
+            Number(uploaded.data.size || req.file.size),
+            category,
+            req.session.user.id,
+            uploaded.data.webViewLink || null
+          ]
+        );
+
+        await run(
+          `INSERT INTO upload_history
+           (file_name,category,action,user_id)
+           VALUES(?,?,?,?)`,
+          [
+            originalName,
+            category,
+            "UPLOAD",
+            req.session.user.id
+          ]
+        );
+
+      } catch (databaseError) {
+        await drive.files.delete({
+          fileId: uploadedFileId
+        }).catch(() => {});
+
+        throw databaseError;
+      }
 
       res.json({
         ok: true,
-        message: "File berhasil dihapus."
+        message: "File berhasil disimpan ke Google Drive.",
+
+        file: {
+          id: uploaded.data.id,
+          name: uploaded.data.name,
+          category
+        }
       });
+
     } catch (error) {
-      console.error(error);
+      console.error(
+        "Upload error:",
+        error.message
+      );
 
       res.status(500).json({
-        error: error.message || "Gagal menghapus file."
+        error: error.message || "Upload gagal."
       });
     }
   }
 );
 
 /* =========================
-   RIWAYAT AKTIVITAS
+   DAFTAR FILE
 ========================= */
 
-app.get("/api/history", auth, async (req, res) => {
+app.get("/api/files", auth, async (req, res) => {
   try {
+    const search = String(
+      req.query.search || ""
+    ).trim().slice(0, 100);
+
+    const category = String(
+      req.query.category || ""
+    ).trim();
+
     const params = [];
 
     let sql = `
-      SELECT h.*, u.username
-      FROM upload_history h
-      JOIN users u ON u.id = h.user_id
+      SELECT f.*, u.username AS uploader
+      FROM files f
+      JOIN users u ON u.id = f.uploaded_by
+      WHERE 1=1
     `;
 
     if (req.session.user.role !== "admin") {
-      sql += " WHERE h.user_id=?";
+      sql += " AND f.uploaded_by=?";
       params.push(req.session.user.id);
     }
 
-    sql += " ORDER BY h.created_at DESC LIMIT 100";
+    if (search) {
+      sql += " AND f.name ILIKE ?";
+      params.push(`%${search}%`);
+    }
+
+    if (category) {
+      sql += " AND f.category=?";
+      params.push(category);
+    }
+
+    sql += " ORDER BY f.created_at DESC LIMIT 300";
 
     const rows = await all(sql, params);
 
     res.json(rows);
+
   } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      error: "Gagal mengambil riwayat aktivitas."
-    });
-  }
-});
-
-/* =========================
-   MANAJEMEN PENGGUNA
-========================= */
-
-app.get(
-  "/api/users",
-  auth,
-  admin,
-  async (_req, res) => {
-    try {
-      const users = await all(
-        `SELECT id,username,role,active,created_at
-         FROM users
-         ORDER BY id`
-      );
-
-      res.json(users);
-    } catch (error) {
-      console.error(error);
-
-      res.status(500).json({
-        error: "Gagal mengambil data pengguna."
-      });
-    }
-  }
-);
-
-app.post(
-  "/api/users",
-  auth,
-  admin,
-  async (req, res) => {
-    try {
-      const username = String(
-        req.body.username || ""
-      ).trim();
-
-      const password = String(
-        req.body.password || ""
-      );
-
-      const role =
-        req.body.role === "admin"
-          ? "admin"
-          : "user";
-
-      if (!/^[a-zA-Z0-9._-]{3,30}$/.test(username)) {
-        return res.status(400).json({
-          error: "Username 3-30 karakter: huruf, angka, titik, _ atau -."
-        });
-      }
-
-      if (password.length < 10) {
-        return res.status(400).json({
-          error: "Password minimal 10 karakter."
-        });
-      }
-
-      const hash = await bcrypt.hash(
-        password,
-        12
-      );
-
-      await run(
-        `INSERT INTO users(username,password_hash,role)
-         VALUES(?,?,?)`,
-        [
-          username,
-          hash,
-          role
-        ]
-      );
-
-      res.json({
-        ok: true,
-        message: "Pengguna berhasil dibuat."
-      });
-    } catch (error) {
-      console.error(error);
-
-      const duplicate =
-        error.code === "23505" ||
-        error.message?.includes("UNIQUE");
-
-      res.status(400).json({
-        error: duplicate
-          ? "Username sudah digunakan."
-          : "Gagal membuat pengguna."
-      });
-    }
-  }
-);
-
-app.patch(
-  "/api/users/:id",
-  auth,
-  admin,
-  async (req, res) => {
-    try {
-      const id = Number(req.params.id);
-
-      if (!Number.isInteger(id) || id <= 0) {
-        return res.status(400).json({
-          error: "ID pengguna tidak valid."
-        });
-      }
-
-      if (
-        id === Number(req.session.user.id) &&
-        req.body.active === false
-      ) {
-        return res.status(400).json({
-          error: "Admin tidak dapat menonaktifkan akunnya sendiri."
-        });
-      }
-
-      const target = await get(
-        "SELECT id FROM users WHERE id=?",
-        [id]
-      );
-
-      if (!target) {
-        return res.status(404).json({
-          error: "Pengguna tidak ditemukan."
-        });
-      }
-
-      await run(
-        "UPDATE users SET active=? WHERE id=?",
-        [
-          req.body.active ? 1 : 0,
-          id
-        ]
-      );
-
-      res.json({
-        ok: true
-      });
-    } catch (error) {
-      console.error(error);
-
-      res.status(500).json({
-        error: "Gagal memperbarui pengguna."
-      });
-    }
-  }
-);
-
-/* =========================
-   ERROR HANDLER
-========================= */
-
-app.use((error, _req, res, _next) => {
-  console.error("Server error:", error);
-
-  if (error instanceof multer.MulterError) {
-    const message =
-      error.code === "LIMIT_FILE_SIZE"
-        ? `Ukuran file melebihi batas ${process.env.MAX_FILE_SIZE_MB || 4} MB.`
-        : error.message;
-
-    return res.status(400).json({
-      error: message
-    });
-  }
-
-  if (!res.headersSent) {
-    res.status(500).json({
-      error: "Terjadi kesalahan pada server."
-    });
-  }
-});
-
-/* =========================
-   SERVER
-========================= */
-
-if (!process.env.VERCEL) {
-  app.listen(PORT, () => {
-    console.log(
-      `DriveSpace berjalan di port ${PORT}`
+    console.error(
+      "File list error:",
+      error.message
     );
-  });
-}
 
-export default app;
+    res.status(500).json({
+      error: "Gagal mengambil daftar file."
+    });
+  }
+});
