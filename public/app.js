@@ -541,15 +541,16 @@ async function deleteFile(file) {
   if (!confirm(`Hapus "${file.name}" dari Google Drive?`)) return;
 
   try {
-    await api(`/api/files/${encodeURIComponent(file.id)}`, {
-      method: "DELETE"
-    });
+  await api(`/api/files/${file.id}`, {
+    method: "DELETE"
+  });
 
-    toast("File berhasil dihapus.");
-    await loadFiles();
-  } catch (error) {
-    alert(error.message);
-  }
+  await loadFiles();
+  await loadStorage();
+
+} catch (e) {
+  alert(e.message);
+}
 }
 
 /* =========================
