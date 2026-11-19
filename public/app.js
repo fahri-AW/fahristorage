@@ -146,6 +146,130 @@ async function loadCategories() {
   }
 }
 
+/* =========================
+   STORAGE DASHBOARD
+========================= */
+
+function formatStorage(bytes) {
+  const value = Number(bytes || 0);
+
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 ** 2) return `${(value / 1024).toFixed(1)} KB`;
+  if (value < 1024 ** 3) return `${(value / 1024 ** 2).toFixed(1)} MB`;
+
+  return `${(value / 1024 ** 3).toFixed(2)} GB`;
+}
+
+async function loadStorage() {
+  try {
+    const data = await api("/api/storage");
+    const storage = data.storage;
+
+    $("#storageUsed").textContent = formatStorage(storage.used);
+
+    $("#storageDriveUsed").textContent =
+      formatStorage(storage.driveUsed);
+
+    $("#storageFileCount").textContent =
+      `${data.files.total} file`;
+
+    $("#storageFileSize").textContent =
+      formatStorage(data.files.totalSize);
+
+    if (storage.unlimited) {
+      $("#storageDescription").textContent =
+        "Batas kapasitas tidak tersedia dari Google Drive";
+
+      $("#storagePercentage").textContent = "--";
+      $("#storageRemaining").textContent = "Kapasitas tidak diketahui";
+      $("#storageProgressBar").style.width = "0%";
+    } else {
+      const percentage = storage.percentage || 0;
+
+      $("#storageDescription").textContent =
+        `Dari kapasitas ${formatStorage(storage.limit)}`;
+
+      $("#storagePercentage").textContent =
+        `${percentage.toFixed(1)}% digunakan`;
+
+      $("#storageRemaining").textContent =
+        `Sisa ${formatStorage(storage.remaining)}`;
+
+      $("#storageProgressBar").style.width =
+        `${percentage}%`;
+    }
+
+    $("#storageStatus").textContent =
+      "● Google Drive terhubung";
+
+    renderFolders(data.folders);
+
+  } catch (error) {
+    $("#storageUsed").textContent = "Tidak tersedia";
+    $("#storageDescription").textContent =
+      "Gagal mengambil informasi penyimpanan";
+
+    $("#storageStatus").textContent =
+      "● Periksa koneksi Google Drive";
+
+    $("#folderGrid").innerHTML = `
+      <div class="folder-loading">
+        Informasi folder belum dapat dimuat.
+      </div>
+    `;
+
+    console.error(error);
+  }
+}
+
+/* =========================
+   RENDER FOLDER
+========================= */
+
+function renderFolders(folders) {
+  const icons = {
+    "Skripsi": "📚",
+    "Akademik": "🎓",
+    "Pekerjaan": "💼",
+    "Pribadi": "👤",
+    "Keuangan": "💰",
+    "Foto & Gambar": "🖼️",
+    "Lainnya": "📁"
+  };
+
+  $("#folderTotal").textContent =
+    `${folders.length} Folder`;
+
+  $("#folderGrid").innerHTML = folders.map(folder => `
+    <article class="folder-card"
+      data-folder="${escapeHTML(folder.name)}">
+
+      <div class="folder-icon">
+        ${icons[folder.name] || "📁"}
+      </div>
+
+      <h3>${escapeHTML(folder.name)}</h3>
+
+      <p>${folder.totalFiles} file tersimpan</p>
+
+      <strong>${formatStorage(folder.totalSize)}</strong>
+
+    </article>
+  `).join("");
+
+  document.querySelectorAll(".folder-card").forEach(card => {
+    card.addEventListener("click", () => {
+      $("#categoryFilter").value = card.dataset.folder;
+      loadFiles();
+
+      document.querySelector(".toolbar").scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+    });
+  });
+}
+
 async function loadFiles() {
   try {
     const params = new URLSearchParams();
