@@ -95,6 +95,13 @@ async function init() {
 
     currentUser = result.user;
     await showApp();
+    await loadCategories();
+await loadFiles();
+await loadStorage();
+
+if (currentUser.role === "admin") {
+  await checkDrive();
+}
   } catch {
     showLogin();
   }
@@ -780,3 +787,4 @@ $("#userForm").addEventListener("submit", async event => {
 });
 
 init();
+$("#refreshStorage").addEventListener("click", loadStorage);
