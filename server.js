@@ -122,11 +122,51 @@ const SCOPES = [
   "https://www.googleapis.com/auth/drive"
 ];
 
+
 function driveForTokens(tokens) {
   const auth = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
     process.env.GOOGLE_REDIRECT_URI
+  );
+
+  auth.setCredentials(tokens);
+
+  // Simpan token terbaru tanpa menghapus refresh token lama.
+  auth.on("tokens", async (fresh) => {
+    try {
+      const row = await get(
+        "SELECT value FROM settings WHERE key='google_tokens'"
+      );
+
+      if (!row) return;
+
+      const current = decrypt(row.value);
+
+      const updated = {
+        ...current,
+        ...fresh,
+        refresh_token: fresh.refresh_token || current.refresh_token
+      };
+
+      await run(
+        "UPDATE settings SET value=? WHERE key='google_tokens'",
+        [encrypt(updated)]
+      );
+    } catch (error) {
+      console.error(
+        "Gagal memperbarui token Google:",
+        error.message
+      );
+    }
+  });
+
+  return google.drive({
+    version: "v3",
+    auth
+  });
+}
+
   );
 
   auth.setCredentials(tokens);
