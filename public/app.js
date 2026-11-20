@@ -513,9 +513,11 @@ async function uploadOne(file, category) {
   const result = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(
+    const error = new Error(
       result.error || `Upload ${file.name} gagal.`
     );
+    error.code = result.code || null;
+    throw error;
   }
 }
 
@@ -584,6 +586,12 @@ async function startUpload() {
     await loadStorage();
 
   } catch (error) {
+    if (error.code === "GOOGLE_REAUTH_REQUIRED") {
+      $("#driveState").textContent = "Koneksi Drive perlu diperbarui";
+      $("#connectDrive").hidden = false;
+      $("#connectDrive").textContent = "Hubungkan ulang Drive";
+    }
+
     toast(
       `${uploadedCount} dari ${files.length} file berhasil diunggah. ${error.message}`,
       true
@@ -801,17 +809,24 @@ async function loadUsers() {
 async function checkDrive() {
   try {
     const data = await api("/api/drive-status");
+    const reconnect = Boolean(data.reconnectRequired);
 
     $("#driveState").textContent = data.connected
       ? "Akun Drive terhubung"
-      : "Belum terhubung";
+      : reconnect
+        ? "Koneksi Drive perlu diperbarui"
+        : "Belum terhubung";
 
-    $("#connectDrive").hidden = data.connected;
+    $("#connectDrive").hidden = Boolean(data.connected);
+    $("#connectDrive").textContent = reconnect
+      ? "Hubungkan ulang Drive"
+      : "Hubungkan Drive";
 
   } catch (error) {
     console.error("Gagal memeriksa Drive:", error);
-    $("#driveState").textContent =
-      "Status tidak tersedia";
+    $("#driveState").textContent = "Status tidak tersedia";
+    $("#connectDrive").hidden = false;
+    $("#connectDrive").textContent = "Hubungkan ulang Drive";
   }
 }
 
