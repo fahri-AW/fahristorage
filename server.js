@@ -706,8 +706,30 @@ app.post("/api/upload", auth, upload.single("file"), async (req, res) => {
       }
     });
   } catch (error) {
-    console.error("Upload error:", error);
-    res.status(500).json({ error: error.message || "Upload gagal." });
+    const googleError = error.response?.data?.error;
+    const googleDescription = error.response?.data?.error_description || "";
+    const needsReconnect =
+      googleError === "invalid_grant" ||
+      googleError === "invalid_token" ||
+      String(googleDescription).includes("invalid_grant") ||
+      String(error.message || "").includes("invalid_grant");
+
+    console.error("Upload error:", {
+      message: error.message,
+      googleError,
+      googleDescription
+    });
+
+    if (needsReconnect) {
+      return res.status(401).json({
+        code: "GOOGLE_REAUTH_REQUIRED",
+        error: "Koneksi Google Drive sudah kedaluwarsa atau dicabut. Klik Hubungkan Drive pada panel kiri, lalu izinkan akses Google kembali."
+      });
+    }
+
+    res.status(500).json({
+      error: error.message || "Upload gagal."
+    });
   }
 });
 
